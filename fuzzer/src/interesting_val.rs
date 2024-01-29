@@ -74,6 +74,6 @@ pub fn get_interesting_bytes<'a>(width: usize) -> &'a [u64] {
         _ => {
             &INTERESTING_V0
             // do nothing
-        },
+        }
     }
 }

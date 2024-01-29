@@ -1,10 +1,10 @@
+use std::thread;
+use std::time;
 use std::{
     fs,
     io::prelude::*,
     path::{Path, PathBuf},
 };
-use std::time;
-use std::thread;
 
 pub fn get_file_name(dir: &Path, id: usize) -> PathBuf {
     let file_name = format!("id:{:06}", id);
@@ -27,7 +27,7 @@ pub fn read_from_file(path: &Path) -> Option<Vec<u8>> {
         i += 1;
         if i == 10 {
             thread::sleep(time::Duration::from_millis(10));
-            return None
+            return None;
             // panic!();
         }
     }
@@ -36,7 +36,10 @@ pub fn read_from_file(path: &Path) -> Option<Vec<u8>> {
 
     match file.read_to_end(&mut buf) {
         Ok(_) => (),
-        Err(error) =>  { warn!("Failed to read to end on file {:?} error {:?}", path, error); return None; },
+        Err(error) => {
+            warn!("Failed to read to end on file {:?} error {:?}", path, error);
+            return None;
+        }
     };
 
     Some(buf)

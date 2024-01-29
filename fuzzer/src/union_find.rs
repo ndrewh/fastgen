@@ -1,7 +1,5 @@
 /// reused from https://github.com/tov/disjoint-sets-rs/blob/master/src/array.rs
 /// augmented with links to retrieve all elements in a set
-
-
 use std::cell::Cell;
 use std::fmt::{self, Debug};
 
@@ -21,7 +19,7 @@ use std::fmt::{self, Debug};
 ///
 /// In other words, `ElementType` sets up a bijection between the first
 /// *k* `usize` values and some *k* values of the `Self` type.
-pub trait ElementType : Copy + Debug + Eq {
+pub trait ElementType: Copy + Debug + Eq {
     /// Converts from `usize` to the element type.
     ///
     /// Returns `None` if the argument won’t fit in `Self`.
@@ -33,9 +31,13 @@ pub trait ElementType : Copy + Debug + Eq {
 
 impl ElementType for usize {
     #[inline]
-    fn from_usize(n: usize) -> Option<usize> { Some(n) }
+    fn from_usize(n: usize) -> Option<usize> {
+        Some(n)
+    }
     #[inline]
-    fn to_usize(self) -> usize { self }
+    fn to_usize(self) -> usize {
+        self
+    }
 }
 
 macro_rules! element_type_impl {
@@ -44,7 +46,11 @@ macro_rules! element_type_impl {
             #[inline]
             fn from_usize(u: usize) -> Option<Self> {
                 let result = u as $type_;
-                if result as usize == u { Some(result) } else { None }
+                if result as usize == u {
+                    Some(result)
+                } else {
+                    None
+                }
             }
 
             #[inline]
@@ -52,7 +58,7 @@ macro_rules! element_type_impl {
                 self as usize
             }
         }
-  }
+    };
 }
 
 element_type_impl!(u8);
@@ -92,14 +98,18 @@ impl<Element: ElementType> UnionFind<Element> {
     /// If `size` elements would overflow the element type `Element`.
     pub fn new(size: usize) -> Self {
         UnionFind {
-            elements: (0..size).map(|i| {
-                let e = Element::from_usize(i).expect("UnionFind::new: overflow");
-                Cell::new(e)
-            }).collect(),
-            links: (0..size).map(|i| {
-                let e = Element::from_usize(i).expect("UnionFind::new: overflow");
-                Cell::new(e)
-            }).collect(),
+            elements: (0..size)
+                .map(|i| {
+                    let e = Element::from_usize(i).expect("UnionFind::new: overflow");
+                    Cell::new(e)
+                })
+                .collect(),
+            links: (0..size)
+                .map(|i| {
+                    let e = Element::from_usize(i).expect("UnionFind::new: overflow");
+                    Cell::new(e)
+                })
+                .collect(),
             ranks: vec![0; size],
         }
     }
@@ -124,8 +134,7 @@ impl<Element: ElementType> UnionFind<Element> {
     /// If allocating another element would overflow the element type
     /// `Element`.
     pub fn alloc(&mut self) -> Element {
-        let result = Element::from_usize(self.elements.len())
-                       .expect("UnionFind::alloc: overflow");
+        let result = Element::from_usize(self.elements.len()).expect("UnionFind::alloc: overflow");
         self.elements.push(Cell::new(result));
         self.ranks.push(0);
         result
@@ -140,7 +149,9 @@ impl<Element: ElementType> UnionFind<Element> {
         let a = self.find(a);
         let b = self.find(b);
 
-        if a == b { return false; }
+        if a == b {
+            return false;
+        }
 
         let temp = self.link(b);
         self.set_link(b, self.link(a));
@@ -183,7 +194,7 @@ impl<Element: ElementType> UnionFind<Element> {
     /// Forces all laziness, so that each element points directly to its
     /// set’s representative.
     pub fn force(&self) {
-        for i in 0 .. self.len() {
+        for i in 0..self.len() {
             let element = Element::from_usize(i).unwrap();
             let root = self.find(element);
             self.set_parent(element, root);
@@ -196,17 +207,17 @@ impl<Element: ElementType> UnionFind<Element> {
         self.elements.iter().map(Cell::get).collect()
     }
 
-    /// Returns a vector of the elements in the sameset  for a given element 
+    /// Returns a vector of the elements in the sameset  for a given element
     pub fn get_set(&self, a: Element) -> Vec<Element> {
-      let mut ret: Vec<Element>  = Vec::new();
-      let root  = a;
-      let mut p = a;
-      ret.push(a);
-      while self.link(p) != root {
-        p = self.link(p);
-        ret.push(p);
-      }
-      ret
+        let mut ret: Vec<Element> = Vec::new();
+        let root = a;
+        let mut p = a;
+        ret.push(a);
+        while self.link(p) != root {
+            p = self.link(p);
+            ret.push(p);
+        }
+        ret
     }
 
     // HELPERS
@@ -261,7 +272,7 @@ mod tests {
         assert!(uf.union(1, 2));
         assert!(uf.union(4, 3));
         assert!(uf.union(3, 2));
-        assert!(! uf.union(0, 3));
+        assert!(!uf.union(0, 3));
 
         assert!(uf.equiv(0, 1));
         assert!(uf.equiv(0, 2));
@@ -288,14 +299,14 @@ mod tests {
         let mut uf0: UnionFind<usize> = UnionFind::new(8);
         uf0.union(0, 1);
         uf0.union(2, 3);
-        assert!( uf0.equiv(0, 1));
+        assert!(uf0.equiv(0, 1));
         assert!(!uf0.equiv(1, 2));
-        assert!( uf0.equiv(2, 3));
+        assert!(uf0.equiv(2, 3));
 
         let json = serde_json::to_string(&uf0).unwrap();
         let uf1: UnionFind<usize> = serde_json::from_str(&json).unwrap();
-        assert!( uf1.equiv(0, 1));
+        assert!(uf1.equiv(0, 1));
         assert!(!uf1.equiv(1, 2));
-        assert!( uf1.equiv(2, 3));
+        assert!(uf1.equiv(2, 3));
     }
 }

@@ -54,7 +54,6 @@ impl CommandOpt {
         mut mem_limit: u64,
         time_limit: u64,
     ) -> Self {
-        
         let tmp_dir = out_dir.join(TMP_DIR);
         tmpfs::create_tmpfs_dir(&tmp_dir);
 

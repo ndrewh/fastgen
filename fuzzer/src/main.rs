@@ -78,5 +78,4 @@ fn main() {
         value_t!(matches, "time_limit", u64).unwrap_or(fastgen_common::config::TIME_LIMIT),
         matches.occurrences_of("sync_afl") > 0,
     );
-
 }

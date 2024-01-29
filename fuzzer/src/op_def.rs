@@ -1,58 +1,58 @@
-use num_derive::FromPrimitive;    
+use num_derive::FromPrimitive;
 
 #[derive(FromPrimitive)]
 pub enum RGD {
-  Bool = 0,
-  Constant,
-  Read,
-  Concat,
-  Extract,
-  ZExt,
-  SExt,
+    Bool = 0,
+    Constant,
+    Read,
+    Concat,
+    Extract,
+    ZExt,
+    SExt,
 
-  //Arithmetic
-  Add,
-  Sub,
-  Mul,
-  UDiv,
-  SDiv,
-  URem,
-  SRem,
-  Neg,
+    //Arithmetic
+    Add,
+    Sub,
+    Mul,
+    UDiv,
+    SDiv,
+    URem,
+    SRem,
+    Neg,
 
-  //Bitwise
-  Not,
-  And,
-  Or,
-  Xor,
-  Shl,
-  LShr,
-  AShr,
+    //Bitwise
+    Not,
+    And,
+    Or,
+    Xor,
+    Shl,
+    LShr,
+    AShr,
 
-  // Relational
-  Equal,
-  Distinct,
-  Ult,
-  Ule,
-  Ugt,
-  Uge,
-  Slt,
-  Sle,
-  Sgt,
-  Sge,
-  
-  //Logical
-  LOr,
-  LAnd,
-  LNot,
+    // Relational
+    Equal,
+    Distinct,
+    Ult,
+    Ule,
+    Ugt,
+    Uge,
+    Slt,
+    Sle,
+    Sgt,
+    Sge,
 
-  //Special
-  Ite,
-  Load,
-  Memcmp,
+    //Logical
+    LOr,
+    LAnd,
+    LNot,
+
+    //Special
+    Ite,
+    Load,
+    Memcmp,
 }
 
-//Derived from llvm-6.0/llvm/IR/Instruction.def 
+//Derived from llvm-6.0/llvm/IR/Instruction.def
 //and dfsan.h
 pub const CONST_OFFSET: u32 = 1;
 pub const DFSAN_READ: u32 = 0;
@@ -88,5 +88,4 @@ pub const DFSAN_BVSGT: u32 = 38;
 pub const DFSAN_BVSGE: u32 = 39;
 pub const DFSAN_BVSLT: u32 = 40;
 pub const DFSAN_BVSLE: u32 = 41;
-pub const DFSAN_FMEMCMP: u32 = 70; 
-
+pub const DFSAN_FMEMCMP: u32 = 70;

@@ -1,14 +1,12 @@
-use crate::file::*;
 use crate::depot_dir::*;
+use crate::file::*;
 use crate::status_type::StatusType;
 use rand;
 use std::{
     fs,
     io::prelude::*,
     path::{Path, PathBuf},
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-    },
+    sync::atomic::{AtomicUsize, Ordering},
 };
 // https://crates.io/crates/priority-queue
 
@@ -29,18 +27,9 @@ impl Depot {
         }
     }
 
-    fn save_input(
-        status: &StatusType,
-        buf: &Vec<u8>,
-        num: &AtomicUsize,
-        dir: &Path,
-    ) -> usize {
+    fn save_input(status: &StatusType, buf: &Vec<u8>, num: &AtomicUsize, dir: &Path) -> usize {
         let mut id = num.load(Ordering::Relaxed);
-        trace!(
-            "Find {} th new {:?} input",
-            id,
-            status,
-        );
+        trace!("Find {} th new {:?} input", id, status,);
         let new_path = get_file_name(dir, id);
         let mut f = fs::File::create(new_path.as_path()).expect("Could not save new input file.");
         f.write_all(buf)
@@ -55,16 +44,13 @@ impl Depot {
         match status {
             StatusType::Normal => {
                 Self::save_input(&status, buf, &self.num_inputs, &self.dirs.inputs_dir)
-            },
+            }
             StatusType::Timeout => {
                 Self::save_input(&status, buf, &self.num_hangs, &self.dirs.hangs_dir)
-            },
-            StatusType::Crash => Self::save_input(
-                &status,
-                buf,
-                &self.num_crashes,
-                &self.dirs.crashes_dir,
-            ),
+            }
+            StatusType::Crash => {
+                Self::save_input(&status, buf, &self.num_crashes, &self.dirs.crashes_dir)
+            }
             _ => 0,
         }
     }
