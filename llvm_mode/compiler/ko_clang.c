@@ -160,7 +160,7 @@ static void add_dfsan_pass() {
   if (is_cxx && getenv("KO_USE_NATIVE_LIBCXX")) {
     cc_params[cc_par_cnt++] = "-mllvm";
     cc_params[cc_par_cnt++] =
-        alloc_printf("-taint-abilist=%s/rules/abilibstdc++.txt", obj_path);
+        alloc_printf("-taint-abilist=%s/rules/libc++_abilist.txt", obj_path);
   }
 }
 
@@ -301,10 +301,10 @@ static void edit_params(u32 argc, char **argv) {
 
   if (maybe_linking) {
 
-    if (x_set) {
+    /* if (x_set) { */
       cc_params[cc_par_cnt++] = "-x";
       cc_params[cc_par_cnt++] = "none";
-    }
+    /* } */
 
     add_runtime();
 
