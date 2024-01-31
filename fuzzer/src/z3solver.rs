@@ -24,6 +24,8 @@ use std::{
 use z3::ast::Ast;
 use z3::{ast, Config, Context, Model, Solver};
 
+const SOLVER_TIMEOUT: u64 = 7 * 10000; // msec
+
 #[derive(Clone)]
 pub struct BranchDep<'a> {
     pub cons_set: Vec<z3::ast::Dynamic<'a>>,
@@ -799,8 +801,8 @@ pub fn solve(
     let ptr = unsafe { rawptr as *mut UnionTable };
     let table = unsafe { &*ptr };
     let mut cfg = Config::new();
-    unsafe { start_session() };
-    cfg.set_timeout_msec(10000);
+    let session = unsafe { start_session() };
+    cfg.set_timeout_msec(SOLVER_TIMEOUT);
     let mut fmemcmp_data = HashMap::new();
     let ctx = Context::new(&cfg);
     let solver = Solver::new(&ctx);
@@ -874,7 +876,7 @@ pub fn solve(
                     continue;
                 }
                 let try_solve = if config::QSYM_FILTER {
-                    unsafe { qsym_filter(msg.addr, msg.result == 1) }
+                    unsafe { qsym_filter(session, msg.addr, msg.result == 1) }
                 } else {
                     hitcount <= 5 && (!flipped) && localcnt <= 16
                 };
@@ -1008,5 +1010,6 @@ pub fn solve(
             break;
         }
     }
+    unsafe { end_session(session); }
     unsafe { libc::shmdt(rawptr) };
 }

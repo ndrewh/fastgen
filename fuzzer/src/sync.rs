@@ -53,7 +53,8 @@ pub fn sync_afl(
                     if let Ok(name) = file_name {
                         if !name.contains(defs::ANGORA_DIR_NAME) && !name.starts_with(".") {
                             let path = entry_path.join("queue");
-                            if path.is_dir() {
+                            let is_main_path = entry_path.join("is_main_node");
+                            if path.is_dir() && is_main_path.is_file() {
                                 sync_one_afl_dir(executor, running.clone(), &path, &name, sync_ids);
                             }
                         }

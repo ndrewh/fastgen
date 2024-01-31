@@ -343,13 +343,10 @@ pub fn fuzz_loop(
     forklock: Arc<Mutex<u32>>,
     bq: BlockingQueue<Solution>,
 ) {
-    let mut id: u32 = 0;
     let executor_id = cmd_opt.id;
 
     if restart {
-        let progress_data = std::fs::read("ce_progress").unwrap();
-        id = (&progress_data[..]).read_u32::<LittleEndian>().unwrap();
-        println!("restarting scan from id {}", id);
+        depot.load_cached_next_id();
     }
 
     let shmid = unsafe {
@@ -363,6 +360,7 @@ pub fn fuzz_loop(
     info!("start fuzz loop with shmid {}", shmid);
 
     //the executor to run the frontend
+    let tid = cmd_opt.id;
 
     let mut executor = Executor::new(
         cmd_opt,
@@ -376,74 +374,75 @@ pub fn fuzz_loop(
     let branch_hitcount = Arc::new(RwLock::new(HashMap::<(u64, u64, u32, u64), u32>::new()));
 
     while running.load(Ordering::Relaxed) {
-        if (id as usize) < depot.get_num_inputs() {
-            let t_start = time::Instant::now();
+        match depot.get_next_input() {
+            Some(id) => {
+                let t_start = time::Instant::now();
+                info!("{} running {}", tid, id);
 
-            if let Some(buf) = depot.get_input_buf(id as usize) {
-                let (mut child, read_end) = executor.track(id as usize, &buf);
+                if let Some(buf) = depot.get_input_buf(id as usize) {
+                    let (mut child, read_end) = executor.track(id as usize, &buf);
 
-                let gbranch_hitcount = branch_hitcount.clone();
-                let gbranch_fliplist = branch_fliplist.clone();
-                let gbranch_gencount = branch_gencount.clone();
-                let solution_queue = bq.clone();
-                let handle = thread::Builder::new()
-                    .stack_size(64 * 1024 * 1024)
-                    .spawn(move || {
-                        constraint_solver(
-                            shmid,
-                            read_end,
-                            solution_queue,
-                            buf.len(),
-                            gbranch_gencount,
-                            gbranch_fliplist,
-                            gbranch_hitcount,
-                        );
-                    })
-                    .unwrap();
+                    let gbranch_hitcount = branch_hitcount.clone();
+                    let gbranch_fliplist = branch_fliplist.clone();
+                    let gbranch_gencount = branch_gencount.clone();
+                    let solution_queue = bq.clone();
+                    let handle = thread::Builder::new()
+                        .stack_size(64 * 1024 * 1024)
+                        .spawn(move || {
+                            constraint_solver(
+                                shmid,
+                                read_end,
+                                solution_queue,
+                                buf.len(),
+                                gbranch_gencount,
+                                gbranch_fliplist,
+                                gbranch_hitcount,
+                            );
+                        })
+                        .unwrap();
 
-                if handle.join().is_err() {
-                    error!("Error happened in listening thread!");
-                }
-
-                //      constraint_solver(shmid, read_end);
-                info!("Done solving {}", id);
-                close(read_end)
-                    .map_err(|err| debug!("close read end {:?}", err))
-                    .ok();
-
-                //let timeout = time::Duration::from_secs(90);
-                //child.wait_timeout(timeout);
-                match child.try_wait() {
-                    Ok(Some(status)) => println!("exited with: {}", status),
-                    Ok(None) => {
-                        println!("status not ready yet, let's really wait");
-                        child.kill();
-                        let res = child.wait();
-                        println!("result: {:?}", res);
+                    if handle.join().is_err() {
+                        error!("Error happened in listening thread!");
                     }
-                    Err(e) => println!("error attempting to wait: {}", e),
-                }
 
-                let used_t1 = t_start.elapsed();
-                let used_us1 =
-                    (used_t1.as_secs() as u32 * 1000_000) + used_t1.subsec_nanos() / 1_000;
-                trace!("track time {}", used_us1);
-                id = id + 1;
-                let mut progress = Vec::new();
-                progress.write_u32::<LittleEndian>(id).unwrap();
-                std::fs::write("ce_progress", &progress)
-                    .map_err(|err| println!("{:?}", err))
-                    .ok();
-            }
-        } else {
-            if config::RUNAFL {
-                info!("run afl mutator");
-                if let Some(mut buf) = depot.get_input_buf(depot.next_random()) {
-                    run_afl_mutator(&mut executor, &mut buf);
+                    //      constraint_solver(shmid, read_end);
+                    info!("Done solving {}", id);
+
+                    // AH: Don't close here! The other thread will close fd when File drops!
+                    //
+                    // close(read_end)
+                    //     .map_err(|err| debug!("close read end {:?}", err))
+                    //     .ok();
+
+                    //let timeout = time::Duration::from_secs(90);
+                    //child.wait_timeout(timeout);
+                    match child.try_wait() {
+                        Ok(Some(status)) => println!("exited with: {}", status),
+                        Ok(None) => {
+                            println!("status not ready yet, let's really wait");
+                            child.kill();
+                            let res = child.wait();
+                            println!("result: {:?}", res);
+                        }
+                        Err(e) => println!("error attempting to wait: {}", e),
+                    }
+
+                    let used_t1 = t_start.elapsed();
+                    let used_us1 =
+                        (used_t1.as_secs() as u32 * 1000_000) + used_t1.subsec_nanos() / 1_000;
+                    trace!("track time {}", used_us1);
                 }
-                thread::sleep(time::Duration::from_millis(10));
-            } else {
-                thread::sleep(time::Duration::from_secs(1));
+            }
+            None => {
+                if config::RUNAFL {
+                    info!("run afl mutator");
+                    if let Some(mut buf) = depot.get_input_buf(depot.next_random()) {
+                        run_afl_mutator(&mut executor, &mut buf);
+                    }
+                    thread::sleep(time::Duration::from_millis(10));
+                } else {
+                    thread::sleep(time::Duration::from_secs(1));
+                }
             }
         }
     }

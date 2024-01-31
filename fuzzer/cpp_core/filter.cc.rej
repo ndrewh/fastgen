@@ -1,0 +1,38 @@
+diff a/fuzzer/cpp_core/filter.cc b/fuzzer/cpp_core/filter.cc	(rejected hunks)
+@@ -99,21 +105,27 @@ extern "C" {
+   void init_core() { 
+     memset(trace_map_, 0, kMapSize);
+     memset(context_map_, 0, kMapSize);
+-    memset(virgin_map_, 0, kMapSize);
+   }
+-  
+-  bool qsym_filter(uint64_t pc, bool taken) {
+-    return isInterestingBranch(pc, taken); 
++
++  bool qsym_filter(uint64_t session, uint64_t pc, bool taken) {
++    struct Session *s = (struct Session *)session;
++    return isInterestingBranch(s, pc, taken);
+   }
+ 
+-  void start_session() {
+-    memset(virgin_map_, 0, kMapSize);
+-    prev_loc_ = 0;
++  uint64_t start_session() {
++    struct Session *s = new struct Session();
++
++    s->prev_loc_ = 0;
+     //for ce testing
+     //memset(trace_map_, 0, kMapSize);
+     //memset(context_map_, 0, kMapSize);
+-    memset(virgin_map_, 0, kMapSize);
+-    visited_.clear();
++    memset(s->virgin_map_, 0, kMapSize);
++    s->visited_.clear();
++    return (uint64_t)s;
++  }
++
++  void end_session(uint64_t session) {
++    delete (struct Session *)session;
+   }
+ 
+ };
