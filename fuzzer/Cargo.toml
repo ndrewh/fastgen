@@ -23,7 +23,7 @@ wait-timeout = "0.2"
 twoway = "0.2.2"
 memmap = "0.7.0"
 rand = "0.7"
-z3 = "0.11.2"
+z3 = { git = "https://github.com/prove-rs/z3.rs.git", rev = "977c5875f967d4c57797142867de11bbae708640" }
 blockingqueue = "0.1.1"
 
 [build-dependencies]

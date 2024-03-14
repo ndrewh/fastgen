@@ -33,6 +33,7 @@ pub fn fuzz_main(
     mem_limit: u64,
     time_limit: u64,
     sync_afl: bool,
+    input_path: &str,
 ) {
     pretty_env_logger::init();
 
@@ -55,23 +56,23 @@ pub fn fuzz_main(
     let forklock = Arc::new(Mutex::new(0));
     set_sigint_handler(running.clone());
 
-    let mut executor = executor::Executor::new(
-        command_option.specify(0),
-        global_branches.clone(),
-        depot.clone(),
-        0,
-        false, //not grading
-        forklock.clone(),
-    );
+    // let mut executor = executor::Executor::new(
+    //     command_option.specify(0),
+    //     global_branches.clone(),
+    //     depot.clone(),
+    //     0,
+    //     false, //not grading
+    //     forklock.clone(),
+    // );
 
-    sync::sync_depot(&mut executor, running.clone(), &depot.dirs.seeds_dir);
+    // sync::sync_depot(&mut executor, running.clone(), &depot.dirs.seeds_dir);
 
-    if depot.empty() {
-        error!(
-            "Please ensure that seed directory - {:?} has ang file",
-            depot.dirs.seeds_dir
-        );
-    }
+    // if depot.empty() {
+    //     error!(
+    //         "Please ensure that seed directory - {:?} has ang file",
+    //         depot.dirs.seeds_dir
+    //     );
+    // }
 
     //  unsafe { init_core(config::SAVING_WHOLE, config::USE_CODECACHE); }
     unsafe {
@@ -86,19 +87,6 @@ pub fn fuzz_main(
     for g in 0.._num_jobs {
         let bq = BlockingQueue::new();
 
-        let r = running.clone();
-        let d = depot.clone();
-        let b = global_branches.clone();
-        let cmd = command_option.specify(first_grader + g);
-        let bg = branch_gencount.clone();
-        let blist = branch_fliplist.clone();
-        let fk = forklock.clone();
-        let bqc = bq.clone();
-        let handle = thread::spawn(move || {
-            //fuzz_loop::branch_checking(r, cmd, d, b, bg, bs);
-            fuzz_loop::grading_loop(r, cmd, d, b, bg, blist, fk, bqc);
-        });
-        handlers.push(handle);
 
         {
             let r = running.clone();
@@ -109,10 +97,11 @@ pub fn fuzz_main(
             let blist = branch_fliplist.clone();
             let fk = forklock.clone();
             let bqc = bq.clone();
+            let input_path = PathBuf::from(input_path);
             let handle = thread::Builder::new()
                 .stack_size(64 * 1024 * 1024)
                 .spawn(move || {
-                    fuzz_loop::fuzz_loop(r, cmd, d, b, bg, blist, restart, fk, bqc);
+                    fuzz_loop::fuzz_one(r, cmd, d, b, bg, blist, restart, fk, bqc, input_path);
                 })
                 .unwrap();
             handlers.push(handle);
@@ -120,7 +109,7 @@ pub fn fuzz_main(
 
     }
 
-    main_thread_sync(out_dir, sync_afl, running.clone(), &mut executor);
+    // main_thread_sync(out_dir, sync_afl, running.clone(), &mut executor);
 
     for handle in handlers {
         if handle.join().is_err() {

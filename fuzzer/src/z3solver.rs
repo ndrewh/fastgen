@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::BufRead;
 use std::io::BufReader;
+use std::io::prelude::*;
 use std::os::unix::io::{FromRawFd, RawFd};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -451,7 +452,7 @@ pub fn serialize<'a>(
             return Some(node);
         }
         DFSAN_BVNEQ => {
-            let node = z3::ast::Dynamic::from(z3::ast::Ast::distinct(ctx, &[&left, &right]));
+            let node = z3::ast::Dynamic::from(z3::ast::Dynamic::distinct(ctx, &[&left, &right]));
             expr_cache.insert(label, node.clone());
             return Some(node);
         }
@@ -635,13 +636,13 @@ pub fn solve_gep<'a>(
 
         let v0 = union(uf, &deps) as usize;
 
-        if try_solve {
+        if try_solve && false {
             if cond.as_bv().is_none() {
                 error!("condition must be a bv for gep");
                 return ret;
             }
             solver.reset();
-            solver.assert(&z3::ast::Ast::distinct(
+            solver.assert(&z3::ast::Dynamic::distinct(
                 ctx,
                 &[&cond, &z3::ast::Dynamic::from_ast(&result)],
             ));
@@ -704,15 +705,15 @@ pub fn solve_cond<'a>(
 
         let v0 = union(uf, &deps) as usize;
 
-        if try_solve {
+        if try_solve && false {
             solver.reset();
             if cond.as_bool().is_none() {
-                solver.assert(&z3::ast::Ast::distinct(
+                solver.assert(&z3::ast::Dynamic::distinct(
                     ctx,
                     &[&cond, &z3::ast::Dynamic::from_ast(&result_bv)],
                 ));
             } else {
-                solver.assert(&z3::ast::Ast::distinct(
+                solver.assert(&z3::ast::Dynamic::distinct(
                     ctx,
                     &[&cond, &z3::ast::Dynamic::from_ast(&result)],
                 ));
@@ -768,6 +769,22 @@ fn preserve<'a>(cond: z3::ast::Bool<'a>, v0: usize, branch_deps: &mut Vec<Option
     deps.cons_set.push(z3::ast::Dynamic::from(cond));
 }
 
+fn dump_constraints<'a>(branch_deps: &Vec<Option<BranchDep<'a>>>, solver: &Solver, input_name: &String) {
+    solver.reset();
+
+    let mut all = HashSet::<&z3::ast::Dynamic>::new();
+    for dep in branch_deps.iter().filter_map(|x| x.as_ref()) {
+        for c in &dep.cons_set {
+            if all.insert(c) {
+                solver.assert(&c.as_bool().unwrap())
+            }
+        }
+    }
+
+    let mut f = File::create(format!("formulas/final_out_symsan_{}", input_name)).unwrap();
+    f.write_all(solver.to_smt2().as_bytes()).expect("dump fail");
+}
+
 fn add_dependencies(
     solver: &Solver,
     v0: usize,
@@ -795,6 +812,7 @@ pub fn solve(
     branch_gencount: &Arc<RwLock<HashMap<(u64, u64, u32, u64), u32>>>,
     branch_fliplist: &Arc<RwLock<HashSet<(u64, u64, u32, u64)>>>,
     branch_hitcount: &Arc<RwLock<HashMap<(u64, u64, u32, u64), u32>>>,
+    input_name: String
 ) {
     info!("solve shmid {} and pipefd {}", shmid, pipefd);
     let rawptr = unsafe { libc::shmat(shmid, std::ptr::null(), 0) };
@@ -1010,6 +1028,7 @@ pub fn solve(
             break;
         }
     }
+    dump_constraints(&branch_deps, &solver, &input_name);
     unsafe { end_session(session); }
     unsafe { libc::shmdt(rawptr) };
 }

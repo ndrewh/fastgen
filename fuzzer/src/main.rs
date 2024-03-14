@@ -24,6 +24,12 @@ fn main() {
              .help("Sets the directory of outputs")
              .takes_value(true)
              .required(true))
+        .arg(Arg::with_name("in_file")
+             .long("infile")
+             .value_name("INFILE")
+             .help("Input file to run")
+             .takes_value(true)
+             .required(true))
         .arg(Arg::with_name("track_target")
              .short("t")
              .long("track")
@@ -77,5 +83,6 @@ fn main() {
         value_t!(matches, "memory_limit", u64).unwrap_or(fastgen_common::config::MEM_LIMIT),
         value_t!(matches, "time_limit", u64).unwrap_or(fastgen_common::config::TIME_LIMIT),
         matches.occurrences_of("sync_afl") > 0,
+        matches.value_of("in_file").unwrap(),
     );
 }

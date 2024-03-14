@@ -2,6 +2,7 @@ use crate::{check_dep, tmpfs};
 use std::{
     path::{Path, PathBuf},
     process::Command,
+    env
 };
 
 static TMP_DIR: &str = "tmp";
@@ -68,13 +69,14 @@ impl CommandOpt {
 
         let has_input_arg = pargs.contains(&"@@".to_string());
 
-        let clang_lib = Command::new("llvm-config")
-            .arg("--libdir")
-            .output()
-            .expect("Can't find llvm-config")
-            .stdout;
-        let clang_lib = String::from_utf8(clang_lib).unwrap();
-        let ld_library = "$LD_LIBRARY_PATH:".to_string() + clang_lib.trim();
+        // let clang_lib = Command::new("llvm-config")
+        //     .arg("--libdir")
+        //     .output()
+        //     .expect("Can't find llvm-config")
+        //     .stdout;
+        // let clang_lib = String::from_utf8(clang_lib).unwrap();
+        // let ld_library = "$LD_LIBRARY_PATH:".to_string() + clang_lib.trim();
+        let ld_library = env::var("ANGORA_TARGET_LD_LIBRARY_PATH").unwrap_or("".to_owned());
 
         assert_ne!(
             track_target, "-",

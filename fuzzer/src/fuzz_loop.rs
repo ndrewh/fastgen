@@ -17,7 +17,7 @@ use fastgen_common::config;
 use protobuf::Message;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 //use crate::util::*;
 use crate::solution::*;
 use crate::z3solver::solve;
@@ -317,6 +317,7 @@ pub fn constraint_solver(
     branch_gencount: Arc<RwLock<HashMap<(u64, u64, u32, u64), u32>>>,
     branch_fliplist: Arc<RwLock<HashSet<(u64, u64, u32, u64)>>>,
     branch_hitcount: Arc<RwLock<HashMap<(u64, u64, u32, u64), u32>>>,
+    input_name: String,
 ) {
     unsafe {
         solve(
@@ -327,12 +328,12 @@ pub fn constraint_solver(
             &branch_gencount,
             &branch_fliplist,
             &branch_hitcount,
+            input_name
         );
     };
 }
 
-//fuzz loop with parsing in C++
-pub fn fuzz_loop(
+pub fn fuzz_one(
     running: Arc<AtomicBool>,
     cmd_opt: CommandOpt,
     depot: Arc<Depot>,
@@ -342,6 +343,7 @@ pub fn fuzz_loop(
     restart: bool,
     forklock: Arc<Mutex<u32>>,
     bq: BlockingQueue<Solution>,
+    input_path: PathBuf
 ) {
     let executor_id = cmd_opt.id;
 
@@ -358,6 +360,7 @@ pub fn fuzz_loop(
     };
 
     info!("start fuzz loop with shmid {}", shmid);
+    let buf = read_from_file(input_path.as_ref()).unwrap();
 
     //the executor to run the frontend
     let tid = cmd_opt.id;
@@ -372,80 +375,42 @@ pub fn fuzz_loop(
     );
 
     let branch_hitcount = Arc::new(RwLock::new(HashMap::<(u64, u64, u32, u64), u32>::new()));
+    let id: u64 = 0;
+    let (mut child, read_end) = executor.track(id as usize, &buf);
 
-    while running.load(Ordering::Relaxed) {
-        match depot.get_next_input() {
-            Some(id) => {
-                let t_start = time::Instant::now();
-                info!("{} running {}", tid, id);
+    let gbranch_hitcount = branch_hitcount.clone();
+    let gbranch_fliplist = branch_fliplist.clone();
+    let gbranch_gencount = branch_gencount.clone();
+    let solution_queue = bq.clone();
+    let input_name = input_path.as_path().file_name().unwrap().to_str().unwrap().to_owned();
 
-                if let Some(buf) = depot.get_input_buf(id as usize) {
-                    let (mut child, read_end) = executor.track(id as usize, &buf);
+    let handle = thread::Builder::new()
+        .stack_size(64 * 1024 * 1024)
+        .spawn(move || {
+            constraint_solver(
+                shmid,
+                read_end,
+                solution_queue,
+                buf.len(),
+                gbranch_gencount,
+                gbranch_fliplist,
+                gbranch_hitcount,
+                input_name
+            );
+        })
+        .unwrap();
 
-                    let gbranch_hitcount = branch_hitcount.clone();
-                    let gbranch_fliplist = branch_fliplist.clone();
-                    let gbranch_gencount = branch_gencount.clone();
-                    let solution_queue = bq.clone();
-                    let handle = thread::Builder::new()
-                        .stack_size(64 * 1024 * 1024)
-                        .spawn(move || {
-                            constraint_solver(
-                                shmid,
-                                read_end,
-                                solution_queue,
-                                buf.len(),
-                                gbranch_gencount,
-                                gbranch_fliplist,
-                                gbranch_hitcount,
-                            );
-                        })
-                        .unwrap();
-
-                    if handle.join().is_err() {
-                        error!("Error happened in listening thread!");
-                    }
-
-                    //      constraint_solver(shmid, read_end);
-                    info!("Done solving {}", id);
-
-                    // AH: Don't close here! The other thread will close fd when File drops!
-                    //
-                    // close(read_end)
-                    //     .map_err(|err| debug!("close read end {:?}", err))
-                    //     .ok();
-
-                    //let timeout = time::Duration::from_secs(90);
-                    //child.wait_timeout(timeout);
-                    match child.try_wait() {
-                        Ok(Some(status)) => println!("exited with: {}", status),
-                        Ok(None) => {
-                            println!("status not ready yet, let's really wait");
-                            child.kill();
-                            let res = child.wait();
-                            println!("result: {:?}", res);
-                        }
-                        Err(e) => println!("error attempting to wait: {}", e),
-                    }
-
-                    let used_t1 = t_start.elapsed();
-                    let used_us1 =
-                        (used_t1.as_secs() as u32 * 1000_000) + used_t1.subsec_nanos() / 1_000;
-                    trace!("track time {}", used_us1);
-                }
-            }
-            None => {
-                if config::RUNAFL {
-                    info!("run afl mutator");
-                    if let Some(mut buf) = depot.get_input_buf(depot.next_random()) {
-                        run_afl_mutator(&mut executor, &mut buf);
-                    }
-                    thread::sleep(time::Duration::from_millis(10));
-                } else {
-                    thread::sleep(time::Duration::from_secs(1));
-                }
-            }
-        }
+    if handle.join().is_err() {
+        error!("Error happened in listening thread!");
     }
+
+    if let Ok(out) = child.wait_with_output() {
+        println!("out: {}", String::from_utf8_lossy(&out.stdout));
+        println!("err: {}", String::from_utf8_lossy(&out.stderr));
+    }
+
+    //      constraint_solver(shmid, read_end);
+    info!("Done solving {}", id);
 }
 
 #[cfg(test)]
