@@ -400,14 +400,18 @@ pub fn fuzz_one(
         })
         .unwrap();
 
+    let child_listen_thread = std::thread::spawn(move || {
+        if let Ok(out) = child.wait_with_output() {
+            println!("out: {}", String::from_utf8_lossy(&out.stdout));
+            println!("err: {}", String::from_utf8_lossy(&out.stderr));
+        }
+     });
+
     if handle.join().is_err() {
         error!("Error happened in listening thread!");
     }
 
-    if let Ok(out) = child.wait_with_output() {
-        println!("out: {}", String::from_utf8_lossy(&out.stdout));
-        println!("err: {}", String::from_utf8_lossy(&out.stderr));
-    }
+     child_listen_thread.join().unwrap();
 
     //      constraint_solver(shmid, read_end);
     info!("Done solving {}", id);
