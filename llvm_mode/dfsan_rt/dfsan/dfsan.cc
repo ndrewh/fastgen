@@ -653,22 +653,25 @@ static void printLabel(dfsan_label label) {
 
 static void __solve_cond(dfsan_label label,
     void *addr, uint64_t ctx, u32 order, 
-    u8 r, u32 predicate, u32 bid, u32 sctx, u32 target_cond) {
+    u8 r, u32 predicate, u32 bid, u32 sctx, u32 target_cond, bool is_real_branch) {
   //session id, label, direction
   static int count = 0;
 
-  if (label ==0 || (get_label_info(label)->flags & B_FLIPPED)) {
-      return;
-  }
+  // if (label ==0 || (get_label_info(label)->flags &  _FLIPPED)) {
+  //     return;
+  // }
 
   printf("%u, %u, %lu, %lu, %lu, %u, 0, %u, %u\n", __tid, label, (u64)r, (uint64_t)addr, ctx, (uint32_t)order, bid, sctx);
 
 
-  struct pipe_msg msg = {.type = 0, .tid = __tid, .label = label, 
+  struct pipe_msg msg = {.type = (is_real_branch ? 0U : 5U), .tid = __tid, .label = label, 
     .result = r, .addr = addr, .ctx = ctx, .localcnt = order, .bid=bid, .sctx=sctx, .predicate = predicate, .target_cond = target_cond};
   write(mypipe,&msg, sizeof(msg));
   fsync(mypipe);
-  get_label_info(label)->flags |= B_FLIPPED;
+
+  if (label != 0)
+    get_label_info(label)->flags |= B_FLIPPED;
+
   return;
 }
 
@@ -716,7 +719,7 @@ __taint_trace_cmp(dfsan_label op1, dfsan_label op2, u32 size, u32 predicate,
   if ((op1 != 0 || op2 != 0))
     temp = dfsan_union(op1, op2, (predicate << 8) | ICmp, size, c1, c2);
 
-  __solve_cond(temp, addr, __taint_trace_callstack,order,r,predicate,bid,__angora_context, c2);
+  __solve_cond(temp, addr, __taint_trace_callstack,order,r,predicate,bid,__angora_context, c2, false);
 }
 
 extern "C" void
@@ -725,7 +728,7 @@ __unfold_branch_fn(u32 r) {}
 
 
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE void
-__taint_trace_cond(dfsan_label label, u8 r, u32 bid) {
+__taint_trace_cond(dfsan_label label, u8 r, u32 bid, u32 is_real_branch) {
   static int count = 0;
   int order = 0;
   int skip = 0;
@@ -748,7 +751,7 @@ __taint_trace_cond(dfsan_label label, u8 r, u32 bid) {
 
   AOUT("solving cond: %u %u %u %p %u %u\n", label, r, __taint_trace_callstack, addr,  bid, __angora_context);
 
-  __solve_cond(label, addr, __taint_trace_callstack, order, r,0,bid,__angora_context, 0);
+  __solve_cond(label, addr, __taint_trace_callstack, order, r,0,bid,__angora_context, 0, is_real_branch != 0);
 }
 
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE void

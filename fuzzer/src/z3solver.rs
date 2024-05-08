@@ -7,7 +7,7 @@ use crate::union_table::*;
 use blockingqueue::BlockingQueue;
 use byteorder::{LittleEndian, ReadBytesExt};
 use fastgen_common::config;
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 use std::collections::HashSet;
 use std::io::BufRead;
 use std::io::BufReader;
@@ -24,6 +24,9 @@ use std::{
 };
 use z3::ast::Ast;
 use z3::{ast, Config, Context, Model, Solver};
+use rand::rngs::{StdRng};
+use rand::{Rng, SeedableRng};
+use std::sync::atomic::{AtomicUsize};
 
 const SOLVER_TIMEOUT: u64 = 7 * 10000; // msec
 
@@ -785,6 +788,95 @@ fn dump_constraints<'a>(branch_deps: &Vec<Option<BranchDep<'a>>>, solver: &Solve
     f.write_all(solver.to_smt2().as_bytes()).expect("dump fail");
 }
 
+const RANDOM_BRANCHFLIP_FREQ: usize = 100;
+
+pub fn random_branchflip_check<'a>(
+    branch_id: u64,
+    label: u32,
+    direction: u64,
+    table: &UnionTable,
+    ctx: &'a Context,
+    solver: &Solver,
+    branch_deps: &mut Vec<Option<BranchDep<'a>>>,
+    fmemcmp_data: &HashMap<u32, Vec<u8>>,
+    eval_branch_hitcount: &mut HashMap<(u64, bool), usize>,
+    eval_branch_dump_counters: &mut HashMap<(u64, bool), usize>,
+    branch_verify_info: &Option<(u64, u64, usize)>,
+    rng: &mut StdRng
+) {
+
+    if direction > 1 {
+        // not a normal branch?
+        return;
+    }
+
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    let counter_val = COUNTER.fetch_add(1, Ordering::SeqCst);
+
+    *eval_branch_hitcount.entry((branch_id, direction == 1)).or_default() += 1;
+
+    if let Some((target_branch_id, orig_dir, orig_dir_count)) = *branch_verify_info {
+        if target_branch_id == branch_id && orig_dir != direction && *eval_branch_hitcount.get(&(branch_id, orig_dir == 1)).unwrap_or(&0) == orig_dir_count - 1 {
+            // successful flip
+            println!("flip_success\n");
+            panic!(); // lets get out of here
+        }
+        return;
+    }
+
+    if rng.gen_range(0..RANDOM_BRANCHFLIP_FREQ) != 0 {
+        // not lucky enough
+        return;
+    }
+
+    match eval_branch_dump_counters.entry((branch_id, direction == 1)) {
+        Entry::Occupied(_) => return,
+        Entry::Vacant(v) => v.insert(1),
+    };
+
+    let result = z3::ast::Bool::from_bool(ctx, direction == 1);
+    let result_bv = z3::ast::BV::from_i64(ctx, direction as i64, 1);
+
+    let mut cache = HashMap::new();
+    let mut expr_cache = HashMap::new();
+
+    let rawcond = (label != 0).then_some(serialize(label, ctx, table, &mut cache, &mut expr_cache, fmemcmp_data)).flatten();
+
+    solver.reset();
+
+    let mut all = HashSet::<&z3::ast::Dynamic>::new();
+    for dep in branch_deps.iter().filter_map(|x| x.as_ref()) {
+        for c in &dep.cons_set {
+            if all.insert(c) {
+                solver.assert(&c.as_bool().unwrap())
+            }
+        }
+    }
+
+    let mut f = File::create(format!("formulas/preflip_{:x}_{}_{}.smt", branch_id, direction, counter_val)).unwrap();
+    f.write_all(solver.to_smt2().as_bytes()).expect("dump fail");
+
+    if let Some(cond) = rawcond {
+        if cond.as_bool().is_none() {
+            solver.assert(&z3::ast::Dynamic::distinct(
+                ctx,
+                &[&cond, &z3::ast::Dynamic::from_ast(&result_bv)],
+            ));
+        } else {
+            solver.assert(&z3::ast::Dynamic::distinct(
+                ctx,
+                &[&cond, &z3::ast::Dynamic::from_ast(&result)],
+            ));
+        }
+    } else {
+        solver.assert(&z3::ast::Bool::from_bool(ctx, false));
+    }
+
+    let mut f = File::create(format!("formulas/flip_{:x}_{}_{}.smt", branch_id, direction, eval_branch_hitcount[&(branch_id, direction == 1)])).unwrap();
+    f.write_all(solver.to_smt2().as_bytes()).expect("dump fail");
+}
+
 fn add_dependencies(
     solver: &Solver,
     v0: usize,
@@ -830,6 +922,21 @@ pub fn solve(
     let mut reader = BufReader::new(f);
     let t_start = time::Instant::now();
     let mut branch_local = HashMap::<(u64, u64), u32>::new();
+    let mut eval_branch_counters = HashMap::<(u64, bool), usize>::new();
+    let mut eval_branch_dump_counters = HashMap::<(u64, bool), usize>::new();
+    let mut rng = StdRng::seed_from_u64(0x1337133713371337);
+
+    let random_branchflip_verify = match std::env::var("EVAL_BRANCH_VERIFY") {
+        Ok(formula_name) => {
+            let parts = formula_name.split("_").collect::<Vec<_>>();
+            let branch_id = u64::from_str_radix(parts[1], 16).unwrap();
+            let direction = u64::from_str_radix(parts[2], 10).unwrap();
+            let count = usize::from_str_radix(parts[3], 10).unwrap();
+            Some((branch_id, direction, count))
+        }
+        _ => None
+    };
+
     loop {
         let rawmsg = PipeMsg::from_reader(&mut reader);
         if let Ok(msg) = rawmsg {
@@ -889,7 +996,25 @@ pub fn solve(
                     .unwrap();
             }
 
-            if msg.msgtype == 0 {
+            if msg.msgtype == 0 || msg.msgtype == 5 {
+
+                if msg.msgtype == 0 {
+                    random_branchflip_check(
+                        msg.addr,
+                        msg.label,
+                        msg.result,
+                        &table,
+                        &ctx,
+                        &solver,
+                        &mut branch_deps,
+                        &fmemcmp_data,
+                        &mut eval_branch_counters,
+                        &mut eval_branch_dump_counters,
+                        &random_branchflip_verify,
+                        &mut rng
+                    );
+                }
+
                 if localcnt > 64 {
                     continue;
                 }

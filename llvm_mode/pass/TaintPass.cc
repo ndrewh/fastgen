@@ -453,7 +453,7 @@ struct TaintFunction {
                    Instruction *Pos);
   void visitCmpInst(CmpInst *I);
   void visitSwitchInst(SwitchInst *I);
-  void visitCondition(Value *Cond, Instruction *I);
+  void visitCondition(Value *Cond, Instruction *I, bool real_branch);
   void visitGEPInst(GetElementPtrInst *I);
 };
 
@@ -719,7 +719,7 @@ bool Taint::doInitialization(Module &M) {
       Int64Ty, Int64Ty, Int32Ty };
   TaintTraceCmpFnTy = FunctionType::get(
       Type::getVoidTy(*Ctx), TaintTraceCmpArgs, false);
-  Type *TaintTraceCondArgs[3] = { ShadowTy, Int8Ty, Int32Ty };
+  Type *TaintTraceCondArgs[4] = { ShadowTy, Int8Ty, Int32Ty, Int32Ty };
   Type *GradeTraceCondArgs[3] = { Int32Ty, Int32Ty, Int32Ty };
   Type *GradeTraceSwitchArgs[3] = { Int32Ty, Int32Ty, Int64Ty };
   TaintTraceCondFnTy = FunctionType::get(
@@ -1823,7 +1823,7 @@ void TaintVisitor::visitSelectInst(SelectInst &I) {
       ShadowSel =
           SelectInst::Create(Condition, TrueShadow, FalseShadow, "", &I);
     }
-    TF.visitCondition(Condition, &I);
+    TF.visitCondition(Condition, &I, false);
     TF.setShadow(&I, ShadowSel);
   }
 }
@@ -2188,7 +2188,7 @@ void TaintVisitor::visitPHINode(PHINode &PN) {
   TF.setShadow(&PN, ShadowPN);
 }
 
-void TaintFunction::visitCondition(Value *Condition, Instruction *I) {
+void TaintFunction::visitCondition(Value *Condition, Instruction *I, bool real_branch) {
   IRBuilder<> IRB(I);
   // get operand
   if (TrackMode) {
@@ -2196,7 +2196,7 @@ void TaintFunction::visitCondition(Value *Condition, Instruction *I) {
     if (Shadow == TT.ZeroShadow)
       return;
     ConstantInt *Cid = ConstantInt::get(TT.Int32Ty, TT.getInstructionId(I));
-    IRB.CreateCall(TT.TaintTraceCondFn, {Shadow, Condition, Cid});
+    IRB.CreateCall(TT.TaintTraceCondFn, {Shadow, Condition, Cid, ConstantInt::get(TT.Int32Ty, real_branch ? 1 : 0)});
   } else {
     LoadInst *CurCtx = IRB.CreateLoad(TT.AngoraContext);
     ConstantInt *Cid = ConstantInt::get(TT.Int32Ty, TT.getInstructionId(I));
@@ -2207,7 +2207,7 @@ void TaintFunction::visitCondition(Value *Condition, Instruction *I) {
 void TaintVisitor::visitBranchInst(BranchInst &BR) {
   if (BR.getMetadata("nosanitize")) return;
   if (BR.isUnconditional()) return;
-  TF.visitCondition(BR.getCondition(), &BR);
+  TF.visitCondition(BR.getCondition(), &BR, true);
 }
 
 static RegisterPass<Taint> X("taint_pass", "Taint Pass");
