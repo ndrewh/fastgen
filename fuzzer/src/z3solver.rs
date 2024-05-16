@@ -736,7 +736,7 @@ pub fn solve_cond<'a>(
         }
         //preserve dependencies
         //preserve
-        let path_cond = cond._eq(&z3::ast::Dynamic::from_ast(&result));
+        // let path_cond = cond._eq(&z3::ast::Dynamic::from_ast(&result));
         if cond.as_bool().is_none() {
             let path_cond = cond._eq(&z3::ast::Dynamic::from_ast(&result_bv));
             preserve(path_cond, v0, branch_deps);
