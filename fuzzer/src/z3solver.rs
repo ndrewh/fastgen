@@ -451,7 +451,7 @@ pub fn serialize<'a>(
             return Some(node);
         }
         DFSAN_BVNEQ => {
-            let node = z3::ast::Dynamic::from(z3::ast::Ast::distinct(ctx, &[&left, &right]));
+            let node = z3::ast::Dynamic::from(z3::ast::Dynamic::distinct(ctx, &[&left, &right]));
             expr_cache.insert(label, node.clone());
             return Some(node);
         }
@@ -641,7 +641,7 @@ pub fn solve_gep<'a>(
                 return ret;
             }
             solver.reset();
-            solver.assert(&z3::ast::Ast::distinct(
+            solver.assert(&z3::ast::Dynamic::distinct(
                 ctx,
                 &[&cond, &z3::ast::Dynamic::from_ast(&result)],
             ));
@@ -707,12 +707,12 @@ pub fn solve_cond<'a>(
         if try_solve {
             solver.reset();
             if cond.as_bool().is_none() {
-                solver.assert(&z3::ast::Ast::distinct(
+                solver.assert(&z3::ast::Dynamic::distinct(
                     ctx,
                     &[&cond, &z3::ast::Dynamic::from_ast(&result_bv)],
                 ));
             } else {
-                solver.assert(&z3::ast::Ast::distinct(
+                solver.assert(&z3::ast::Dynamic::distinct(
                     ctx,
                     &[&cond, &z3::ast::Dynamic::from_ast(&result)],
                 ));
