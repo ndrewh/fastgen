@@ -247,8 +247,8 @@ pub fn grading_loop(
                     saved += 1;
                 }
 
-                info!("flipped/reached/not_reached/sol_cons/saved/flipped_hashes/notflipped_hashes/notreached_hashes {}/{}/{}/{}/{}/{}/{}/{} {}", 
-            flipped, reached, not_reached, sol_conds, saved, flipped_hashes.len(), notflipped_hashes.len(), notreached_hashes.len(), addr);
+                // info!("flipped/reached/not_reached/sol_cons/saved/flipped_hashes/notflipped_hashes/notreached_hashes {}/{}/{}/{}/{}/{}/{}/{} {}", 
+            // flipped, reached, not_reached, sol_conds, saved, flipped_hashes.len(), notflipped_hashes.len(), notreached_hashes.len(), addr);
                 /*
                   if is_cmp {
                   let (mut child, read_end) = executor.track(0, &buf);
