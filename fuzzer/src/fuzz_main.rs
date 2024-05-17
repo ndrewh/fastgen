@@ -33,6 +33,8 @@ pub fn fuzz_main(
     mem_limit: u64,
     time_limit: u64,
     sync_afl: bool,
+    executor_timeout: u64,
+    solver_timeout: u64
 ) {
     pretty_env_logger::init();
 
@@ -62,6 +64,7 @@ pub fn fuzz_main(
         0,
         false, //not grading
         forklock.clone(),
+        executor_timeout
     );
 
     sync::sync_depot(&mut executor, running.clone(), &depot.dirs.seeds_dir);
@@ -112,7 +115,7 @@ pub fn fuzz_main(
             let handle = thread::Builder::new()
                 .stack_size(64 * 1024 * 1024)
                 .spawn(move || {
-                    fuzz_loop::fuzz_loop(r, cmd, d, b, bg, blist, restart, fk, bqc);
+                    fuzz_loop::fuzz_loop(r, cmd, d, b, bg, blist, restart, fk, bqc, executor_timeout, solver_timeout);
                 })
                 .unwrap();
             handlers.push(handle);

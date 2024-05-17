@@ -21,7 +21,6 @@ use std::{
     time,
 };
 use wait_timeout::ChildExt;
-const EXEC_TIMEOUT: usize = 120 * 7;
 
 pub fn dup2(fd: i32, device: i32) -> Result<(), &'static str> {
     match unsafe { libc::dup2(fd, device) } {
@@ -67,6 +66,7 @@ pub struct Executor {
     pub has_new_path: bool,
     pub shmid: i32,
     pub fl: Arc<Mutex<u32>>,
+    executor_timeout: u64
 }
 
 impl Executor {
@@ -77,6 +77,7 @@ impl Executor {
         shmid: i32,
         is_grading: bool,
         forklock: Arc<Mutex<u32>>,
+        executor_timeout: u64
     ) -> Self {
         // ** Share Memory **
         let branches = branches::Branches::new(global_branches);
@@ -134,6 +135,7 @@ impl Executor {
             has_new_path: false,
             shmid,
             fl: forklock.clone(),
+            executor_timeout
         }
     }
 
@@ -360,7 +362,7 @@ impl Executor {
         let (read_end, write_end) = pipe().unwrap();
         let mut cmd = Command::new("timeout");
         let mut child = cmd
-            .arg(format!("{}", EXEC_TIMEOUT))
+            .arg(format!("{}", self.executor_timeout))
             .arg(&target.0)
             .args(&target.1)
             //  .stdin(Stdio::null())

@@ -61,6 +61,16 @@ fn main() {
              .value_name("Graders")
              .help("Sets the number of grader jobs, default is 1")
              .takes_value(true))
+        .arg(Arg::with_name("executor_timeout")
+             .long("executor_timeout")
+             .value_name("EXECUTOR_TIMEOUT")
+             .help("Timeout in seconds for the executor")
+             .takes_value(true))
+        .arg(Arg::with_name("solver_timeout")
+             .long("solver_timeout")
+             .value_name("SOLVER_TIMEOUT")
+             .help("Timeout in seconds for the solver")
+             .takes_value(true))
         .arg(Arg::with_name("sync_afl")
              .short("S")
              .long("sync_afl")
@@ -77,5 +87,7 @@ fn main() {
         value_t!(matches, "memory_limit", u64).unwrap_or(fastgen_common::config::MEM_LIMIT),
         value_t!(matches, "time_limit", u64).unwrap_or(fastgen_common::config::TIME_LIMIT),
         matches.occurrences_of("sync_afl") > 0,
+        value_t!(matches, "executor_timeout", usize).unwrap_or(120) as u64,
+        value_t!(matches, "solver_timeout", usize).unwrap_or(10) as u64,
     );
 }
