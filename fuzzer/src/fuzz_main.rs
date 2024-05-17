@@ -34,6 +34,8 @@ pub fn fuzz_main(
     time_limit: u64,
     sync_afl: bool,
     input_path: &str,
+    executor_timeout: u64,
+    solver_timeout: u64
 ) {
     pretty_env_logger::init();
 
@@ -101,7 +103,7 @@ pub fn fuzz_main(
             let handle = thread::Builder::new()
                 .stack_size(64 * 1024 * 1024)
                 .spawn(move || {
-                    fuzz_loop::fuzz_one(r, cmd, d, b, bg, blist, restart, fk, bqc, input_path);
+                    fuzz_loop::fuzz_one(r, cmd, d, b, bg, blist, restart, fk, bqc, input_path, executor_timeout, solver_timeout);
                 })
                 .unwrap();
             handlers.push(handle);

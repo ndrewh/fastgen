@@ -28,8 +28,6 @@ use rand::rngs::{StdRng};
 use rand::{Rng, SeedableRng};
 use std::sync::atomic::{AtomicUsize};
 
-const SOLVER_TIMEOUT: u64 = 7 * 10000; // msec
-
 #[derive(Clone)]
 pub struct BranchDep<'a> {
     pub cons_set: Vec<z3::ast::Dynamic<'a>>,
@@ -904,7 +902,8 @@ pub fn solve(
     branch_gencount: &Arc<RwLock<HashMap<(u64, u64, u32, u64), u32>>>,
     branch_fliplist: &Arc<RwLock<HashSet<(u64, u64, u32, u64)>>>,
     branch_hitcount: &Arc<RwLock<HashMap<(u64, u64, u32, u64), u32>>>,
-    input_name: String
+    input_name: String,
+    solver_timeout: u64 // sec
 ) {
     info!("solve shmid {} and pipefd {}", shmid, pipefd);
     let rawptr = unsafe { libc::shmat(shmid, std::ptr::null(), 0) };
@@ -912,7 +911,7 @@ pub fn solve(
     let table = unsafe { &*ptr };
     let mut cfg = Config::new();
     let session = unsafe { start_session() };
-    cfg.set_timeout_msec(SOLVER_TIMEOUT);
+    cfg.set_timeout_msec(solver_timeout * 1000);
     let mut fmemcmp_data = HashMap::new();
     let ctx = Context::new(&cfg);
     let solver = Solver::new(&ctx);

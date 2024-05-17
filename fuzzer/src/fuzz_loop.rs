@@ -98,6 +98,7 @@ pub fn grading_loop(
         shmid,
         true,
         forklock.clone(),
+        120
     );
 
     //let branch_gencount = Arc::new(RwLock::new(HashMap::<(u64,u64,u32), u32>::new()));
@@ -318,6 +319,7 @@ pub fn constraint_solver(
     branch_fliplist: Arc<RwLock<HashSet<(u64, u64, u32, u64)>>>,
     branch_hitcount: Arc<RwLock<HashMap<(u64, u64, u32, u64), u32>>>,
     input_name: String,
+    solver_timeout: u64
 ) {
     unsafe {
         solve(
@@ -328,7 +330,8 @@ pub fn constraint_solver(
             &branch_gencount,
             &branch_fliplist,
             &branch_hitcount,
-            input_name
+            input_name,
+            solver_timeout
         );
     };
 }
@@ -343,7 +346,9 @@ pub fn fuzz_one(
     restart: bool,
     forklock: Arc<Mutex<u32>>,
     bq: BlockingQueue<Solution>,
-    input_path: PathBuf
+    input_path: PathBuf,
+    executor_timeout: u64,
+    solver_timeout: u64
 ) {
     let executor_id = cmd_opt.id;
 
@@ -372,6 +377,7 @@ pub fn fuzz_one(
         shmid,
         true, //not grading
         forklock.clone(),
+        executor_timeout
     );
 
     let branch_hitcount = Arc::new(RwLock::new(HashMap::<(u64, u64, u32, u64), u32>::new()));
@@ -395,7 +401,8 @@ pub fn fuzz_one(
                 gbranch_gencount,
                 gbranch_fliplist,
                 gbranch_hitcount,
-                input_name
+                input_name,
+                solver_timeout
             );
         })
         .unwrap();
